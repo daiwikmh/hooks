@@ -9,12 +9,30 @@ import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
 import {SwapParams} from "v4-core/types/PoolOperation.sol";
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
-contract TakeProfitsHook is BaseHook {
+contract TakeProfitsHook is BaseHook, ERC1155 {
    
 
+
+    using StateLibrary for IPoolManager;
+    using FixedPointMathLib for int24
+    
+
+    error InvalidOrder();
+    error NothingToClaim();
+    error NotEnoughToClaim();
+
+
+    //Poolid => Tick => Zeroforone /oneforzero
+
+    mapping(Poolid _poolId => 
+            mapping(int24 tickToSellAt => 
+                mapping(bool zeroForOne => uint256 inputAmount))) public pendingorders;
+       
+    
     // Initialize BaseHook parent contract in the constructor
-    constructor(IPoolManager _poolManager) BaseHook(_poolManager) {
+    constructor(IPoolManager _poolManager string memory uri) BaseHook(_poolManager)     ERC1155(uri) {
         updateMovingAverage();
     }
 
@@ -78,7 +96,7 @@ contract TakeProfitsHook is BaseHook {
         // Custom logic for after swap can be added here
         // This could include actions like updating state or triggering events
     return this.afterSwap.selector;
-    
+    }
 }
 
 /*
@@ -97,12 +115,35 @@ which direction (in or out) Assume we always round down
 5.transfer the input tokens from their wallet to the hook contract 
 */
 
+
+mapping(uint orderId => uint claimSupply) public claimTokenSupply;
+
+function getOrderId(
+    PoolKey calldata key,
+    int24 tickToSellAt,
+    bool zeroForOne
+) internal pure returns (uint) {
+    // Generate a unique order ID based on the pool key, tick, and direction
+    return uint(keccak256(abi.encode(key, tickToSellAt, zeroForOne)));
+}
+
+
+
+
 function getLowerUsableTick(
         int24 _tick,
         int24 _tickSpacing
     ) internal view returns (int24) {
         // Calculate the lower usable tick based on the pool key and current tick
         int24 intervals = _tick / _tickSpacing;
+        if(_tick < 0 && _tick % _tickSpacing != 0) {
+            --intervals; // Adjust for negative ticks
+
+        //actual usable tick is intervals * tickSpacing
+        //example: -2* 60 = -120
+        
+        return intervals * _tickSpacing;
+
     
         }
 
