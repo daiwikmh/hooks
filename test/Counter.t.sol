@@ -130,6 +130,9 @@ uint256 poolIdUint = uint256(PoolId.unwrap(key.toId()));
 
              assertEq(pointsBalanceAfterSwap - pointsBalanceOriginal, 2 * 10 ** 14);
 
+
+        console.log("balance", hookData.length);
+
         //confirm our balance
         console.log("Testing swap functionality...");
     }
